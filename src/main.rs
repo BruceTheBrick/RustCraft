@@ -1,12 +1,10 @@
 mod window_debug_info;
 
 use std::sync::Arc;
+use image::GenericImageView;
 use window_debug_info::WindowDebugInfo;
 use winit::{
-    application::ApplicationHandler,
-    event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop, ControlFlow},
-    window::{Window, WindowId},
+    application::ApplicationHandler, event::WindowEvent, event_loop::{ActiveEventLoop, ControlFlow, EventLoop}, window::{Icon, Window, WindowId},
 };
 
 
@@ -22,8 +20,10 @@ impl ApplicationHandler for App {
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {
+            let window_icon = create_icon();
             let window_attributes = Window::default_attributes()
                 .with_title("Winit Tutorial")
+                .with_window_icon(Some(window_icon))
                 .with_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
             
             let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
@@ -62,6 +62,22 @@ impl ApplicationHandler for App {
             _ => ()
         }
     }
+}
+
+fn create_icon() -> Icon {
+    let png_bytes = include_bytes!("assets/logo.png");
+
+    let image = image::load_from_memory(png_bytes)
+        .expect("failed to decode window icon")
+        .into_rgba8();
+    let (width, height) = image.dimensions();
+    let rgba = image.into_raw_bgra();
+
+    // Ensure the RGBA data length is valid
+    assert!(rgba.len() % 4 == 0);
+    assert!(width * height == (rgba.len() / 4) as u32);
+
+    Icon::from_rgba(rgba, width, height).expect("Failed to create icon")
 }
 
 fn main() {
