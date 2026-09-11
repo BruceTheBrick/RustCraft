@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 glam = "0.33.7"
 pollster = "1.0.1"
+image = "0.25.10"
 wgpu = "30.0.1"
 wgpu_text = "30.0.0"
 winit = "0.30.13"
