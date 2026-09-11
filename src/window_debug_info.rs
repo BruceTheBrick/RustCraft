@@ -14,6 +14,8 @@ impl Default for WindowDebugInfo {
 }
 
 impl WindowDebugInfo{
+    const FPS_UPDATE_SECONDS: f32 = 1.0;
+
     pub fn new () -> Self{
         Self{
             last_frame: Instant::now(),
@@ -29,7 +31,8 @@ impl WindowDebugInfo{
         self.last_frame = now;
         self.frame_count += 1;
 
-        if self.fps_timer.elapsed().as_secs_f32() >= 1.0 {
+        // Update the FPS every second
+        if self.fps_timer.elapsed().as_secs_f32() >= Self::FPS_UPDATE_SECONDS{
             self.current_fps = self.frame_count as f32 / self.fps_timer.elapsed().as_secs_f32();
             self.frame_count = 0;
             self.fps_timer = now;
