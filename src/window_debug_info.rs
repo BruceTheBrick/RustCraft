@@ -1,10 +1,10 @@
 use std::time::Instant;
 
 pub struct WindowDebugInfo{
-    last_frame: Instant,
-    frame_count: u32,
-    fps_timer: Instant,
-    current_fps: f32,
+    pub last_frame: Instant,
+    pub frame_count: u32,
+    pub fps_timer: Instant,
+    pub current_fps: f32,
 }
 
 impl Default for WindowDebugInfo {
@@ -27,7 +27,6 @@ impl WindowDebugInfo{
 
     pub fn update_fps(&mut self){
         let now = Instant::now();
-        let delta = now.duration_since(self.last_frame).as_secs_f32();
         self.last_frame = now;
         self.frame_count += 1;
 
