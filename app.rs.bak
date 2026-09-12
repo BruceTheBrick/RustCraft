@@ -1,0 +1,238 @@
+use crate::renderer::Renderer;
+use crate::window_debug_info::WindowDebugInfo;
+use crate::window_manager::WindowManager;
+use std::sync::Arc;
+use wgpu::{SurfaceColorSpace::Auto};
+use wgpu_text::{BrushBuilder, TextBrush, glyph_brush::ab_glyph::FontRef};
+use wgpu_text::glyph_brush::{Section as TextSection, Text};
+use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::{Icon, Window, WindowId}};
+use pollster;
+
+#[derive(Default)]
+pub struct App {
+    window_manager: WindowManager,
+    renderer: Renderer,
+    frame_counter: WindowDebugInfo,
+    surface: Option<wgpu::Surface<'static>>,
+    gpu_instance: wgpu::Instance,
+    adapter: Option<wgpu::Adapter>,
+    device: Option<wgpu::Device>,
+    queue: Option<wgpu::Queue>,
+    textbrush: Option<TextBrush<FontRef<'static>>>,
+    surface_format: Option<wgpu::TextureFormat>,
+}
+
+impl App {
+    fn configure_surface(&mut self){
+        let window = self.window_manager.window.as_ref().expect("Window is not initialized");
+        let surface = self.surface.as_mut().expect("Surface is not initialized");
+        let adapter = self.adapter.as_ref().expect("Adapter is not initialized");
+        let device = self.device.as_ref().expect("Device is not initialized");
+
+        let size = window.inner_size();
+        let surface_caps = surface.get_capabilities(&adapter);
+
+        self.surface_format = Some(surface_caps.formats[0]); // Choose the first supported format
+
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: self.surface_format.expect("Surface format is not initialized"),
+            width: size.width,
+            height: size.height,
+            present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+            color_space: Auto,
+        };
+
+        surface.configure(&device, &config);
+        self.build_textbrush();
+    }
+
+    fn handle_resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        if new_size.width <= 0 || new_size.height <= 0 {
+            return;
+        }
+
+        let queue = self.queue.as_ref().expect("Queue is not initialized");
+        let text_brush = self.textbrush.as_mut().expect("TextBrush is not initialized");
+        text_brush.resize_view(new_size.width as f32, new_size.height as f32, queue); 
+        self.configure_surface();
+    }
+    
+    fn handle_redraw(&mut self) {
+        let surface = self.surface.as_ref().expect("Surface is not initialized");
+        let device = self.device.as_ref().expect("Device is not initialized");
+
+        let output = match surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(output)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(output) => output,
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded => return,
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                eprintln!("Surface needs to be reconfigured");
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Lost => {
+                eprintln!("Surface was lost and must be recreated");
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Validation => {
+                eprintln!("Surface texture validation failed");
+                return;
+            }
+        };
+
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let fps_text = format!("FPS: {:.2}", self.get_framerate());
+        let text_brush = self.textbrush.as_mut().expect("TextBrush is not initialized");
+        let section = TextSection::default()
+            .with_screen_position((10.0, 10.0))
+            .with_text(vec![Text::new(&fps_text)
+                .with_color([1.0, 1.0, 1.0, 1.0])
+                .with_scale(24.0)]);
+
+        let queue = self.queue.as_ref().expect("Queue is not initialized");
+        let _ = text_brush.queue(device, queue, vec![section]);
+        let mut encoder = device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("render encoder"),
+            });
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("clear pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.05,
+                            g: 0.08,
+                            b: 50.12,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                multiview_mask: None,
+            });
+
+            text_brush.draw(&mut render_pass);
+        }
+
+        let queue = self.queue.as_ref().expect("Queue is not initialized");
+        queue.submit(std::iter::once(encoder.finish()));
+        queue.present(output);
+    }
+    
+    fn build_textbrush(&mut self) {
+        if self.textbrush.is_some(){
+            return;
+        }
+
+        let device = self.device.as_ref().expect("Device is not initialized");
+        let font = include_bytes!("assets/font.ttf");
+        let brush = BrushBuilder::using_font_bytes(font)
+        .expect("Failed to load font")
+        .build(device, 800, 600, self.surface_format.expect("Surface format is not initialized"));
+        self.textbrush = Some(brush);
+    }
+
+    fn get_framerate(&self) -> f32 {
+        self.frame_counter.current_fps
+    }
+}
+
+impl ApplicationHandler for App {
+    async fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.window_manager.is_window_initialised() {
+            return;
+        }
+
+        self.window_manager = WindowManager::default();
+        self.window_manager.init(event_loop);
+
+        let state = Renderer::new(self.window_manager.window.unwrap()).await;
+
+        self.gpu_instance = wgpu::Instance::default();
+
+        let surface = self.gpu_instance.create_surface(Arc::clone(&self.window_manager.window.as_mut().expect("window_manager.window should be initialised"))).expect("Failed to create surface");
+        self.surface = Some(surface);
+
+        self.adapter = Some(pollster::block_on(self.gpu_instance.request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::default(),
+                compatible_surface: self.surface.as_ref(),
+                force_fallback_adapter: false,
+                apply_limit_buckets: true,
+            },
+        )).expect("Failed to find an appropriate adapter"));
+
+        let adapter = self.adapter.as_ref().expect("Adapter is not initialized");
+        let (device, queue) = pollster::block_on(adapter.request_device(
+            &wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::default(),
+                trace: wgpu::Trace::Off,
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                memory_hints: wgpu::MemoryHints::default(),
+            },
+        )).expect("Failed to create device");
+
+        self.device = Some(device);
+        self.queue = Some(queue);
+        self.configure_surface();
+
+        self.window_manager.window.as_mut().expect("window_manager.window should be initialised").request_redraw();
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if self.window_manager.is_window_initialised(){
+            return;
+        }
+
+        self.window_manager.init(event_loop);
+    }
+
+    // This handles events sent to specific windows (e.g., resizing, keypresses, closing).
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        // Ensure the event belongs to our window instance
+        if window_id != self.window_manager.window_id.expect("window_manager.window_id is undefined") {
+            return;
+        }
+
+        self.frame_counter.update_fps();
+
+        match event {
+            // Triggered when the user clicks the 'X' button
+            WindowEvent::CloseRequested => {
+                println!("The close button was clicked; exiting...");
+                event_loop.exit();
+            }
+            // Triggered when the window needs to redraw its contents
+            WindowEvent::RedrawRequested => {
+                self.handle_redraw();
+            }
+
+            WindowEvent::Resized(size) => {
+                self.handle_resize(size);
+            }
+            _ => ()
+        }
+    }
+}
