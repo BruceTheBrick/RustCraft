@@ -1,4 +1,5 @@
-use crate::renderer::Renderer;
+use crate::triangle::Triangle;
+use crate::{render_manager::RenderManager, renderer::BaseRenderer};
 use crate::window_debug_info::WindowDebugInfo;
 use crate::window_manager::WindowManager;
 use std::sync::Arc;
@@ -7,7 +8,7 @@ use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::Act
 #[derive(Default)]
 pub struct App {
     window_manager: WindowManager,
-    renderer: Option<Renderer>,
+    render_manager: Option<RenderManager>,
     frame_counter: WindowDebugInfo,
 }
 
@@ -19,11 +20,11 @@ impl ApplicationHandler for App {
 
         self.window_manager.init(event_loop);
         let window = Arc::clone(self.window_manager.window.as_ref().expect("window_manager.window should be initialised"));
-
-        let renderer = pollster::block_on(Renderer::new(window)).expect("Failed to initilaise Renderer");
-        self.renderer = Some(renderer);
-
         self.window_manager.window.as_ref().expect("window_manager.window should be initialised").request_redraw();
+
+        let mut render_manager = pollster::block_on(RenderManager::new(window));
+        render_manager.add_triangle(Triangle::new());
+        self.render_manager = Some(render_manager);
     }
 
     // This handles events sent to specific windows (e.g., resizing, keypresses, closing).
@@ -37,8 +38,12 @@ impl ApplicationHandler for App {
             // Triggered when the window needs to redraw its contents
             WindowEvent::RedrawRequested => {
                 self.frame_counter.update_fps();
-                if let Some(renderer) = &mut self.renderer{
-                    renderer.render(self.frame_counter.current_fps);
+
+                //TODO Can this be cleaner? renderer and render_state need to be <Option> because App doesn't
+                // implement Default. But I hate this gross statement
+                if let Some(renderer) = &mut self.renderer &&
+                    let Some(render_state) = &mut self.render_state{
+                    renderer.render(render_state);
                 }
 
                 self.window_manager.window

@@ -3,7 +3,7 @@ use bytemuck::{Pod, Zeroable};
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex{
-    position: [f32; 3],
+    position: [f32; 2],
     color: [f32; 3],
 }
 
@@ -33,7 +33,7 @@ pub const SHADER: &str = r#"
     "#;
 
 impl Vertex {
-    pub fn new(position: [f32; 3], color: [f32; 3]) -> Self {
+    pub fn new(position: [f32; 2], color: [f32; 3]) -> Self {
         Self { position, color }
     }
 

@@ -1,15 +1,14 @@
 use std::sync::Arc;
-
+use crate::render_manager::RenderManager;
 use wgpu::Device;
-use wgpu_text::{BrushBuilder, TextBrush, glyph_brush::{Text, ab_glyph::FontRef}};
-use wgpu_text::glyph_brush::{Section as TextSection};
+use wgpu_text::{BrushBuilder, TextBrush, glyph_brush::ab_glyph::FontRef};
 use winit::window::Window;
 
-pub struct Renderer {
+pub struct BaseRenderer {
 
     // GPU State Management
+    pub device: wgpu::Device,
     surface: wgpu::Surface<'static>,
-    device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
 
@@ -17,7 +16,7 @@ pub struct Renderer {
     text_brush: TextBrush<FontRef<'static>>,
 }
 
-impl Renderer {
+impl BaseRenderer {
     pub async fn new(window: Arc<Window>) -> Result<Self, RendererError>  {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
@@ -55,7 +54,7 @@ impl Renderer {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Fifo,
+            present_mode: wgpu::PresentMode::Immediate,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
@@ -64,7 +63,7 @@ impl Renderer {
 
         surface.configure(&device, &config);
 
-        let text_brush = Renderer::build_textbrush(&device, &config);
+        let text_brush = BaseRenderer::build_textbrush(&device, &config);
         Ok(Self {
             surface,
             device,
@@ -86,7 +85,7 @@ impl Renderer {
         self.text_brush.resize_view(new_size.width as f32, new_size.height as f32, &self.queue);
     }
 
-    pub fn render(&mut self, fps: f32) {
+    pub fn render(&mut self, render_state: &mut RenderManager) {
         let output = match self.surface.get_current_texture(){
         
             wgpu::CurrentSurfaceTexture::Success(texture)
@@ -110,14 +109,15 @@ impl Renderer {
             label: Some("Render Encoder"),
         });
 
-        let fps_text = format!("FPS: {:.0}", fps);
-        let section = TextSection::default()
-            .with_screen_position((10.0, 10.0))
-            .with_text(vec![Text::new(&fps_text)
-                .with_color([1.0, 1.0, 1.0, 1.0])
-                .with_scale(24.0)]);
-        self.text_brush.queue(&self.device, &self.queue, vec![section]);
-
+        // let fps_text = format!("FPS: {:.0}", fps);
+        // let section = TextSection::default()
+        //     .with_screen_position((10.0, 10.0))
+        //     .with_text(vec![Text::new(&fps_text)
+        //         .with_color([1.0, 1.0, 1.0, 1.0])
+        //         .with_scale(24.0)]);
+        // self.text_brush.queue(&self.device, &self.queue, vec![section]);
+        
+        render_state.prepare_renderables();
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -138,7 +138,8 @@ impl Renderer {
                 multiview_mask: None,
             });
 
-            self.text_brush.draw(&mut render_pass);
+            render_state.draw_renderables(&mut render_pass);
+            // self.text_brush.draw(&mut render_pass);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -146,7 +147,7 @@ impl Renderer {
     }
 
     fn build_textbrush(device: &Device, config: &wgpu::SurfaceConfiguration) -> TextBrush<FontRef<'static>>{
-        let font = include_bytes!("assets/font.ttf");
+        let font = include_bytes!("../assets/font.ttf");
         let brush = BrushBuilder::using_font_bytes(font)
             .expect("Failed to load font")
             .build(&device, config.width, config.height, config.format);
