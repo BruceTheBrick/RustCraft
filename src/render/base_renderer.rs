@@ -91,7 +91,7 @@ impl BaseRenderer {
 
     pub fn render<F>(&mut self, callback: F)
     where
-        F: FnOnce(&mut wgpu::RenderPass<'_>, &mut wgpu::Queue),
+        F: FnOnce(&mut wgpu::CommandEncoder, &wgpu::TextureView, &wgpu::Queue),
     {
         let output = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture)
@@ -111,50 +111,14 @@ impl BaseRenderer {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
 
-        // let fps_text = format!("FPS: {:.0}", fps);
-        // let section = TextSection::default()
-        //     .with_screen_position((10.0, 10.0))
-        //     .with_text(vec![Text::new(&fps_text)
-        //         .with_color([1.0, 1.0, 1.0, 1.0])
-        //         .with_scale(24.0)]);
-        // self.text_brush.queue(&self.device, &self.queue, vec![section]);
-
-        // render_state.prepare_renderables();
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view, // write the results into our surface texture
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        // Clear the whole texture to this colour at the start
-                        // of the pass (RGBA on a 0–1 scale)…
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store, // …and keep the result in the texture
-                    },
-                    depth_slice: None, // 2D target, so no depth slice
-                })],
-                depth_stencil_attachment: None,
-                occlusion_query_set: None,
-                timestamp_writes: None,
-                multiview_mask: None,
-            });
-
-            callback(&mut render_pass, &mut self.queue);
-            // render_state.draw_renderables(&mut render_pass);
-            // self.text_brush.draw(&mut render_pass);
-        }
+        callback(&mut encoder, &view, &self.queue);
 
         self.queue.submit(std::iter::once(encoder.finish()));
         self.queue.present(output);

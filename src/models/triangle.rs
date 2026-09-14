@@ -20,6 +20,7 @@ impl Triangle {
         Self { vertices }
     }
 
+    /// Provides a reference to the Vetex objects owned by this Triangle
     pub fn vertices(&self) -> &[Vertex; 3] {
         return &self.vertices;
     }

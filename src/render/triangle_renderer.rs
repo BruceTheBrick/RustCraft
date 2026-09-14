@@ -4,18 +4,28 @@ use crate::{renderable::Renderer, triangle::Triangle, vertex::Vertex};
 
 pub struct TriangleRenderer {
     render_pipeline: wgpu::RenderPipeline,
+    staging_buffer: Buffer,
     vertex_buffer: Buffer,
     triangles: Vec<Triangle>,
 }
 const TRIANGLES_PER_BATCH: usize = 10;
 const VERTICES_PER_TRIANGLE: usize = 3;
-const BUFFER_CAPACITY_IN_TRIANGLES: usize = 121;
+const BUFFER_CAPACITY_IN_TRIANGLES: usize = 150;
 
 impl TriangleRenderer {
     pub fn new(device: &Device) -> Self {
+        let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Triangle Vertex Staging Buffer"),
+            size: (BUFFER_CAPACITY_IN_TRIANGLES
+                * VERTICES_PER_TRIANGLE
+                * std::mem::size_of::<Vertex>()) as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Triangle Vertex Buffer"),
-            size: (BUFFER_CAPACITY_IN_TRIANGLES
+            size: (TRIANGLES_PER_BATCH
                 * VERTICES_PER_TRIANGLE
                 * std::mem::size_of::<Vertex>()) as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
@@ -25,6 +35,7 @@ impl TriangleRenderer {
         let render_pipeline = TriangleRenderer::create_render_pipeline(device);
         Self {
             render_pipeline,
+            staging_buffer,
             vertex_buffer,
             triangles: vec![],
         }
@@ -39,6 +50,38 @@ impl TriangleRenderer {
     pub fn add_triangle(&mut self, triangle: Triangle) {
         self.triangles.push(triangle);
     }
+
+    pub fn prepare(&self, queue: &Queue){
+        let mut vertices = Vec::new();
+        for triangle in &self.triangles{
+            vertices.extend_from_slice(triangle.vertices());
+        }
+
+        queue.write_buffer(
+                &self.staging_buffer,
+                0,
+                bytemuck::cast_slice(&vertices),
+            );
+    }
+
+    pub fn copy_batch(
+    &self,
+    command_encoder: &mut wgpu::CommandEncoder,
+    staging_offset: u64,
+    triangle_count: usize,
+) {
+    let vertex_count = triangle_count * VERTICES_PER_TRIANGLE;
+
+    let size = (vertex_count * std::mem::size_of::<Vertex>()) as u64;
+
+    command_encoder.copy_buffer_to_buffer(
+        &self.staging_buffer,
+        staging_offset,
+        &self.vertex_buffer,
+        0,
+        size,
+    );
+}
 
     fn create_render_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -100,12 +143,6 @@ impl Renderer for TriangleRenderer {
         let mut batch_count = 0;
 
         for x in 0..self.triangles.len() {
-            queue.write_buffer(
-                &self.vertex_buffer,
-                (batch_count * std::mem::size_of::<Vertex>() * VERTICES_PER_TRIANGLE) as u64,
-                bytemuck::cast_slice(self.triangles[x].vertices()),
-            );
-
             batch_count += 1;
 
             if batch_count == TRIANGLES_PER_BATCH {
