@@ -1,4 +1,3 @@
-use crate::render_manager::RenderManager;
 use std::sync::Arc;
 use wgpu::{Device, Queue};
 use wgpu_text::{BrushBuilder, TextBrush, glyph_brush::ab_glyph::FontRef};
@@ -92,7 +91,7 @@ impl BaseRenderer {
 
     pub fn render<F>(&mut self, callback: F)
     where
-        F: FnOnce(&mut wgpu::RenderPass<'_>),
+        F: FnOnce(&mut wgpu::RenderPass<'_>, &mut wgpu::Queue),
     {
         let output = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture)
@@ -152,7 +151,7 @@ impl BaseRenderer {
                 multiview_mask: None,
             });
 
-            callback(&mut render_pass);
+            callback(&mut render_pass, &mut self.queue);
             // render_state.draw_renderables(&mut render_pass);
             // self.text_brush.draw(&mut render_pass);
         }

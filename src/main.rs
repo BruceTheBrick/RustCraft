@@ -5,8 +5,6 @@ mod triangle;
 mod vertex;
 mod window_debug_info;
 
-#[path = "render/render_pipeline.rs"]
-mod render;
 #[path = "render/render_manager.rs"]
 mod render_manager;
 #[path = "render/renderable.rs"]

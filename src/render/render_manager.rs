@@ -1,6 +1,4 @@
 use std::sync::Arc;
-
-use wgpu::RenderPass;
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
@@ -27,17 +25,18 @@ impl RenderManager {
 
     pub fn render(&mut self) {
         let triangle_renderer = &self.triangle_renderer;
-        self.base_renderer.render(|render_pass| {
-            triangle_renderer.render(render_pass);
+        self.base_renderer.render(|render_pass, queue| {
+            triangle_renderer.render(render_pass, queue);
         });
     }
 
-    pub fn resize(&self, size: PhysicalSize<u32>) {}
+    pub fn resize(&self, _size: PhysicalSize<u32>) {}
 
     pub fn add_triangle(&mut self, triangle: Triangle) {
-        self.triangle_renderer
-            .add_triangle(self.base_renderer.queue(), triangle);
+        self.triangle_renderer.add_triangle(triangle);
     }
 
-    fn handle_render(&self, render_pass: &mut RenderPass<'_>) {}
+    pub fn add_triangles(&mut self, triangles: Vec<Triangle>) {
+        self.triangle_renderer.add_triangles(triangles);
+    }
 }

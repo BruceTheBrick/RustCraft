@@ -1,4 +1,4 @@
-use wgpu::{Buffer, Device, Queue, RenderPass, RenderPipeline};
+use wgpu::{Buffer, Device, Queue, RenderPass};
 
 use crate::{renderable::Renderer, triangle::Triangle, vertex::Vertex};
 
@@ -7,12 +7,17 @@ pub struct TriangleRenderer {
     vertex_buffer: Buffer,
     triangles: Vec<Triangle>,
 }
+const TRIANGLES_PER_BATCH: usize = 10;
+const VERTICES_PER_TRIANGLE: usize = 3;
+const BUFFER_CAPACITY_IN_TRIANGLES: usize = 121;
 
 impl TriangleRenderer {
     pub fn new(device: &Device) -> Self {
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Triangle Vertex Buffer"),
-            size: (3 * std::mem::size_of::<Vertex>()) as wgpu::BufferAddress,
+            size: (BUFFER_CAPACITY_IN_TRIANGLES
+                * VERTICES_PER_TRIANGLE
+                * std::mem::size_of::<Vertex>()) as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -26,15 +31,12 @@ impl TriangleRenderer {
     }
 
     pub fn add_triangles(&mut self, triangles: Vec<Triangle>) {
-        self.triangles.extend(triangles);
+        for triangle in triangles {
+            self.add_triangle(triangle);
+        }
     }
 
-    pub fn add_triangle(&mut self, queue: &Queue, triangle: Triangle) {
-        queue.write_buffer(
-            &self.vertex_buffer,
-            0,
-            bytemuck::cast_slice(triangle.vertices()),
-        );
+    pub fn add_triangle(&mut self, triangle: Triangle) {
         self.triangles.push(triangle);
     }
 
@@ -93,9 +95,34 @@ impl TriangleRenderer {
 }
 
 impl Renderer for TriangleRenderer {
-    fn render(&self, render_pass: &mut RenderPass<'_>) {
-        render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.draw(0..3, 0..1);
+    fn render(&self, render_pass: &mut RenderPass<'_>, queue: &Queue) {
+        println!("Rendering {} triangles", self.triangles.len());
+        let mut batch_count = 0;
+
+        for x in 0..self.triangles.len() {
+            queue.write_buffer(
+                &self.vertex_buffer,
+                (batch_count * std::mem::size_of::<Vertex>() * VERTICES_PER_TRIANGLE) as u64,
+                bytemuck::cast_slice(self.triangles[x].vertices()),
+            );
+
+            batch_count += 1;
+
+            if batch_count == TRIANGLES_PER_BATCH {
+                render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+                render_pass.draw(0..(batch_count * VERTICES_PER_TRIANGLE) as u32, 0..1);
+
+                batch_count = 0;
+            }
+        }
+
+        if batch_count > 0 {
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+            render_pass.draw(0..(batch_count * VERTICES_PER_TRIANGLE) as u32, 0..1);
+        }
     }
 }
