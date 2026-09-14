@@ -1,25 +1,25 @@
-mod window_debug_info;
 mod app;
-#[path="models/vertex.rs"]
-mod vertex;
-#[path="models/triangle.rs"]
+#[path = "models/triangle.rs"]
 mod triangle;
+#[path = "models/vertex.rs"]
+mod vertex;
+mod window_debug_info;
 
-#[path="render/base_renderer.rs"]
-mod renderer;
-#[path ="render/render_pipeline.rs"]
+#[path = "render/render_pipeline.rs"]
 mod render;
-#[path="render/window_manager.rs"]
-mod window_manager;
-#[path="render/renderable.rs"]
-mod renderable;
-#[path="render/render_manager.rs"]
+#[path = "render/render_manager.rs"]
 mod render_manager;
-#[path="render/triangle_renderer.rs"]
+#[path = "render/renderable.rs"]
+mod renderable;
+#[path = "render/base_renderer.rs"]
+mod renderer;
+#[path = "render/triangle_renderer.rs"]
 mod triangle_renderer;
+#[path = "render/window_manager.rs"]
+mod window_manager;
 
-use winit::event_loop::{ControlFlow, EventLoop};
 use crate::app::App;
+use winit::event_loop::{ControlFlow, EventLoop};
 
 fn main() {
     let event_loop = EventLoop::new().unwrap();

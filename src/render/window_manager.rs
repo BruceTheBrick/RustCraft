@@ -1,11 +1,14 @@
 use std::sync::Arc;
 
-use winit::{event_loop::ActiveEventLoop, window::{Icon, Window, WindowId}};
+use winit::{
+    event_loop::ActiveEventLoop,
+    window::{Icon, Window, WindowId},
+};
 
 #[derive(Default)]
-pub struct WindowManager{
+pub struct WindowManager {
     pub window: Option<Arc<Window>>,
-    pub window_id: Option<WindowId>
+    pub window_id: Option<WindowId>,
 }
 
 impl WindowManager {

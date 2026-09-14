@@ -1,9 +1,12 @@
+use crate::render_manager::RenderManager;
 use crate::triangle::Triangle;
-use crate::{render_manager::RenderManager, renderer::BaseRenderer};
 use crate::window_debug_info::WindowDebugInfo;
 use crate::window_manager::WindowManager;
 use std::sync::Arc;
-use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::{Icon, Window, WindowId}};
+use winit::{
+    application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop,
+    window::WindowId,
+};
 
 #[derive(Default)]
 pub struct App {
@@ -19,8 +22,17 @@ impl ApplicationHandler for App {
         }
 
         self.window_manager.init(event_loop);
-        let window = Arc::clone(self.window_manager.window.as_ref().expect("window_manager.window should be initialised"));
-        self.window_manager.window.as_ref().expect("window_manager.window should be initialised").request_redraw();
+        let window = Arc::clone(
+            self.window_manager
+                .window
+                .as_ref()
+                .expect("window_manager.window should be initialised"),
+        );
+        self.window_manager
+            .window
+            .as_ref()
+            .expect("window_manager.window should be initialised")
+            .request_redraw();
 
         let mut render_manager = pollster::block_on(RenderManager::new(window));
         render_manager.add_triangle(Triangle::new());
@@ -28,7 +40,7 @@ impl ApplicationHandler for App {
     }
 
     // This handles events sent to specific windows (e.g., resizing, keypresses, closing).
-    fn window_event(&mut self, event_loop: &ActiveEventLoop,_: WindowId,event: WindowEvent,) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
         match event {
             // Triggered when the user clicks the 'X' button
             WindowEvent::CloseRequested => {
@@ -39,25 +51,23 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 self.frame_counter.update_fps();
 
-                //TODO Can this be cleaner? renderer and render_state need to be <Option> because App doesn't
-                // implement Default. But I hate this gross statement
-                if let Some(renderer) = &mut self.renderer &&
-                    let Some(render_state) = &mut self.render_state{
-                    renderer.render(render_state);
+                if let Some(render_manager) = &mut self.render_manager {
+                    render_manager.render();
                 }
 
-                self.window_manager.window
-                .as_ref()
-                .expect("window_manager.window should be initialised")
-                .request_redraw();
+                self.window_manager
+                    .window
+                    .as_ref()
+                    .expect("window_manager.window should be initialised")
+                    .request_redraw();
             }
 
             WindowEvent::Resized(size) => {
-                if let Some(renderer) = &mut self.renderer{
-                    renderer.resize(size);
+                if let Some(render_manager) = &mut self.render_manager {
+                    render_manager.resize(size);
                 }
             }
-            _ => ()
+            _ => (),
         }
     }
 }

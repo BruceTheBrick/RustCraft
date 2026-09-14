@@ -2,14 +2,14 @@ use bytemuck::{Pod, Zeroable};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct Vertex{
+pub struct Vertex {
     position: [f32; 2],
     color: [f32; 3],
 }
 
 pub const SHADER: &str = r#"
     struct VertexInput{
-        @location(0) position: vec3<f32>,
+        @location(0) position: vec2<f32>,
         @location(1) color: vec3<f32>,
     };
 
@@ -19,10 +19,10 @@ pub const SHADER: &str = r#"
     };
 
     @vertex
-    fn vs_main(in: VertextInput) -> VertexOutput{
+    fn vs_main(in: VertexInput) -> VertexOutput{
         var out: VertexOutput;
         out.color = in.color;
-        out.position = vec4<f32>(in.position, 1.0);
+        out.position = vec4<f32>(in.position, 0.0, 1.0);
         return out;
     }
 
@@ -45,10 +45,10 @@ impl Vertex {
                 wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
+                    format: wgpu::VertexFormat::Float32x2,
                 },
                 wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x3,
                 },
